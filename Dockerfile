@@ -1,11 +1,12 @@
-FROM golang:1.20 AS build_base
+FROM golang:1.24-alpine AS build_base
 WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
 COPY . .
-RUN go get -d -v ./...
-RUN go install -v ./...
-RUN export GIT_COMMIT=$(git rev-list -1 HEAD) && \
-CGO_ENABLED=0 go build -ldflags "-X main.GitCommit=$GIT_COMMIT" -o main main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .
 
-FROM scratch
-COPY --from=build_base /src/main /main
-CMD ["/main"]
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates
+WORKDIR /root/
+COPY --from=build_base /src/main .
+CMD ["./main"]
