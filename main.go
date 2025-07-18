@@ -17,7 +17,23 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 )
 
-// string leaderStatusFile = os.TempDir() + "/leader-elector"
+// Default values for leader election timing
+const (
+	defaultLeaseDuration = 15 * time.Second
+	defaultRenewDeadline = 10 * time.Second
+	defaultRetryPeriod   = 2 * time.Second
+)
+
+// getEnvDuration gets duration from environment variable with LE_ prefix, returns default if not set
+func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
+	if value := os.Getenv("LE_" + key); value != "" {
+		if duration, err := time.ParseDuration(value); err == nil {
+			return duration
+		}
+		log.Printf("Invalid duration format for LE_%s: %s, using default: %v", key, value, defaultValue)
+	}
+	return defaultValue
+}
 
 func getLeaseDirectoryPath() string {
 	dirPath, exists := os.LookupEnv("LEASE_DIRECTORY")
@@ -25,52 +41,52 @@ func getLeaseDirectoryPath() string {
 		dirPath = filepath.Join(os.TempDir(), "leader-elector")
 	}
 
-	if err := os.Mkdir(dirPath, os.ModeDir); err != nil && !os.IsExist(err) {
-		log.Fatal(err)
+	if err := os.MkdirAll(dirPath, 0755); err != nil {
+		log.Fatalf("Failed to create lease directory: %v", err)
 	}
 
 	fileInfo, err := os.Stat(dirPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to stat lease directory: %v", err)
 	}
 	if !fileInfo.IsDir() {
-		log.Fatal("Lease directory path is not a directory: \"" + dirPath + "\" . Use LEASE_DIRECTORY variable to set a proper (existing or new) directory.")
+		log.Fatalf("Lease directory path is not a directory: \"%s\". Use LEASE_DIRECTORY variable to set a proper directory.", dirPath)
 	}
 
 	return dirPath
 }
 
-func main() {
+// setupLeaderElection configures and returns the leader election configuration
+func setupLeaderElection() (*leaderelection.LeaderElectionConfig, string, error) {
 	// Get in-cluster config
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		// If in-cluster config fails, use KUBECONFIG
 		kubeconfig, exists := os.LookupEnv("KUBECONFIG")
 		if !exists {
-			log.Fatal("Failed to get in-cluster config and KUBECONFIG not set")
+			return nil, "", fmt.Errorf("failed to get in-cluster config and KUBECONFIG not set")
 		}
 
 		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
 		if err != nil {
-			log.Fatal(err.Error())
+			return nil, "", fmt.Errorf("failed to build config from flags: %w", err)
 		}
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		log.Fatal(err.Error())
+		return nil, "", fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 
 	id, err := os.Hostname()
 	if err != nil {
-		log.Fatal(err.Error())
+		return nil, "", fmt.Errorf("failed to get hostname: %w", err)
 	}
 
 	// Get lease and namespace from environment variables
 	leaseName, exists := os.LookupEnv("LEASE_NAME")
 	if !exists {
 		leaseName = filepath.Base(os.Args[0])
-		// panic("LEASE_NAME not set")
 	}
 
 	namespace, exists := os.LookupEnv("NAMESPACE")
@@ -80,14 +96,23 @@ func main() {
 		namespace = clientCfg.Contexts[clientCfg.CurrentContext].Namespace
 
 		if namespace == "" {
-			log.Fatal("NAMESPACE is not set")
+			return nil, "", fmt.Errorf("NAMESPACE is not set")
 		}
 	}
 
 	leaseDirectory := getLeaseDirectoryPath()
 	leaderStatusFile := filepath.Join(leaseDirectory, leaseName)
 
-	log.Println("Using LEASE_NAME: ", leaseName, "in NAMESPACE: ", namespace, " . LEASE_DIRECTORY: ", leaseDirectory)
+	log.Printf("Starting leader election - LEASE_NAME: %s, NAMESPACE: %s, LEASE_DIRECTORY: %s", 
+		leaseName, namespace, leaseDirectory)
+
+	// Get timing values from environment variables
+	leaseDuration := getEnvDuration("LEASE_DURATION", defaultLeaseDuration)
+	renewDeadline := getEnvDuration("RENEW_DEADLINE", defaultRenewDeadline)
+	retryPeriod := getEnvDuration("RETRY_PERIOD", defaultRetryPeriod)
+
+	log.Printf("Leader election timing - LeaseDuration: %v, RenewDeadline: %v, RetryPeriod: %v",
+		leaseDuration, renewDeadline, retryPeriod)
 
 	// Lock required for leader election
 	lock := &resourcelock.LeaseLock{
@@ -101,57 +126,81 @@ func main() {
 		},
 	}
 
-	// Try and become the leader
-	leaderelection.RunOrDie(context.TODO(), leaderelection.LeaderElectionConfig{
+	// Create leader election configuration
+	leaderElectionConfig := &leaderelection.LeaderElectionConfig{
 		Lock:          lock,
-		LeaseDuration: 15 * time.Second,
-		RenewDeadline: 10 * time.Second,
-		RetryPeriod:   2 * time.Second,
+		LeaseDuration: leaseDuration,
+		RenewDeadline: renewDeadline,
+		RetryPeriod:   retryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
 				// we're now the leader
-				log.Println("This application is the leader for LEASE_NAME: " + lock.LeaseMeta.Name + " in NAMESPACE: " + lock.LeaseMeta.Namespace + " .")
-				updateStatus(id, leaderStatusFile)
+				log.Printf("Became leader for LEASE_NAME: %s in NAMESPACE: %s", 
+					lock.LeaseMeta.Name, lock.LeaseMeta.Namespace)
+				if err := updateStatus(id, leaderStatusFile); err != nil {
+					log.Printf("Failed to update status file: %v", err)
+				}
 			},
 			OnStoppedLeading: func() {
 				// we are not the leader anymore
-				log.Println("This application has lost leadership for LEASE_NAME: " + lock.LeaseMeta.Name + " in NAMESPACE: " + lock.LeaseMeta.Namespace + " .")
-				removeStatusFile(leaderStatusFile)
+				log.Printf("Lost leadership for LEASE_NAME: %s in NAMESPACE: %s", 
+					lock.LeaseMeta.Name, lock.LeaseMeta.Namespace)
+				if err := removeStatusFile(leaderStatusFile); err != nil {
+					log.Printf("Failed to remove status file: %v", err)
+				}
 			},
 			OnNewLeader: func(identity string) {
 				// we observe a new leader
 				if identity != id {
-					log.Println("This application has lost leadership for LEASE_NAME: " + lock.LeaseMeta.Name + " in NAMESPACE: " + lock.LeaseMeta.Namespace + " to " + id + " .")
-					removeStatusFile(leaderStatusFile)
+					log.Printf("New leader elected: %s for LEASE_NAME: %s in NAMESPACE: %s", 
+						identity, lock.LeaseMeta.Name, lock.LeaseMeta.Namespace)
+					if err := removeStatusFile(leaderStatusFile); err != nil {
+						log.Printf("Failed to remove status file: %v", err)
+					}
 				}
 			},
 		},
-	})
+	}
+
+	return leaderElectionConfig, leaderStatusFile, nil
 }
 
-func updateStatus(status string, leaderStatusFile string) {
+func main() {
+	leaderElectionConfig, _, err := setupLeaderElection()
+	if err != nil {
+		log.Fatalf("Failed to setup leader election: %v", err)
+	}
+
+	// Try and become the leader
+	leaderelection.RunOrDie(context.Background(), *leaderElectionConfig)
+}
+
+func updateStatus(status string, leaderStatusFile string) error {
 	f, err := os.Create(leaderStatusFile)
 	if err != nil {
-		panic(err.Error())
+		return fmt.Errorf("failed to create status file: %w", err)
 	}
 
 	defer func() {
-		if err := f.Close(); err != nil {
-			fmt.Printf("failed to close file: %v", err)
+		if closeErr := f.Close(); closeErr != nil {
+			log.Printf("Failed to close status file: %v", closeErr)
 		}
 	}()
 
-	_, err = f.WriteString(status)
-	if err != nil {
-		panic(err.Error())
+	if _, err := f.WriteString(status); err != nil {
+		return fmt.Errorf("failed to write status: %w", err)
 	}
+	
 	if err := f.Sync(); err != nil {
-		fmt.Printf("failed to sync file: %v", err)
+		log.Printf("Failed to sync status file: %v", err)
 	}
+	
+	return nil
 }
 
-func removeStatusFile(leaderStatusFile string) {
-	if err := os.Remove(leaderStatusFile); err != nil {
-		fmt.Printf("failed to remove %s, error: %s", leaderStatusFile, err)
+func removeStatusFile(leaderStatusFile string) error {
+	if err := os.Remove(leaderStatusFile); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove status file: %w", err)
 	}
+	return nil
 }
