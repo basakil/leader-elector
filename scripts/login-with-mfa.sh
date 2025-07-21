@@ -5,17 +5,29 @@
 
 set -e
 
+print_help() {
+  cat <<EOF
+Obtain and export temporary AWS credentials using MFA (Multi-Factor Authentication).
+
+Usage:
+  source $0 [<MFA_DEVICE_ARN>] [--token <MFA_TOKEN_CODE>] [--help|-h]
+
+Parameters:
+  <MFA_DEVICE_ARN>   (positional) The ARN or serial number of your MFA device (optional if MFA_DEVICE_ARN env var is set)
+  --token <code>     The MFA token code (if not provided, you will be prompted)
+  -h, --help         Show this help message and exit/return
+
+Examples:
+  source $0 arn:aws:iam::123456789012:mfa/my-user --token 123456
+  source $0 --token 123456
+  export MFA_DEVICE_ARN=arn:aws:iam::123456789012:mfa/my-user; source $0
+EOF
+}
+
 # Find project root (parent of script directory) without cd
 SCRIPT=$(readlink -f "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
 PROJECT_ROOT="$SCRIPTPATH/.."
-
-# Usage:
-#   source aws_mfa_login.sh [<MFA_DEVICE_ARN>] [--token <MFA_TOKEN_CODE>]
-#
-# If <MFA_DEVICE_ARN> is not provided as a positional argument, the script
-# will attempt to use the MFA_DEVICE_ARN environment variable.
-# If --token <MFA_TOKEN_CODE> is not provided, the script will prompt for it.
 
 # --- Configuration ---
 # Maximum duration for sts:GetSessionToken is 12 hours (43200 seconds)
@@ -37,6 +49,10 @@ while [[ "$#" -gt 0 ]]; do
                 return 1
             fi
             ;;
+        -h|--help)
+            print_help
+            return 0
+            ;;
         *) # Positional argument (MFA_DEVICE_ARN)
             # Check if it looks like an ARN or a serial number
             if [[ "$1" =~ ^arn:aws:iam::[0-9]{12}:mfa/.*$ ]] || [[ "$1" =~ ^[0-9]{9,}$ ]]; then
@@ -46,7 +62,7 @@ while [[ "$#" -gt 0 ]]; do
                 _positional_mfa_arn_provided="$1"
             else
                 echo "Error: Unrecognized argument or invalid MFA Device ARN format: '$1'."
-                echo "Usage: source $(basename "$0") [<MFA_DEVICE_ARN>] [--token <MFA_TOKEN_CODE>]"
+                print_help
                 return 1
             fi
             ;;
@@ -63,7 +79,7 @@ if [ -n "$_positional_mfa_arn_provided" ]; then
     MFA_DEVICE_ARN="$_positional_mfa_arn_provided"
 elif [ -z "$MFA_DEVICE_ARN" ]; then
     # If no positional arg and env var is not set, then it's an error
-    echo "Usage: source $(basename "$0") [<MFA_DEVICE_ARN>] [--token <MFA_TOKEN_CODE>]"
+    print_help
     echo "Error: Please provide your MFA Device ARN as the first argument or set it as an environment variable (e.g., export MFA_DEVICE_ARN='arn:aws:iam::...')."
     return 1 # Use return for sourced scripts to exit the sourcing
 else
