@@ -4,34 +4,34 @@
 
 set -e
 
-# Change to project root (parent of script directory)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$SCRIPT_DIR/.."
-cd "$PROJECT_ROOT"
+# Find project root (parent of script directory) without cd
+SCRIPT=$(readlink -f "$0")
+SCRIPTPATH=$(dirname "$SCRIPT")
+PROJECT_ROOT="$SCRIPTPATH/.."
 
 echo "Running leader-elector tests..."
 
 # Function to run tests with different options
 run_tests() {
     echo "Running basic tests..."
-    go test -v ./...
+    (cd "$PROJECT_ROOT" && go test -v ./...)
 }
 
 run_coverage() {
     echo "Running tests with coverage..."
-    go test -coverprofile=coverage.out ./...
-    go tool cover -func=coverage.out
-    echo "Coverage report generated: coverage.out"
+    (cd "$PROJECT_ROOT" && go test -coverprofile=coverage.out ./...)
+    (cd "$PROJECT_ROOT" && go tool cover -func=coverage.out)
+    echo "Coverage report generated: $PROJECT_ROOT/coverage.out"
 }
 
 run_benchmarks() {
     echo "Running benchmarks..."
-    go test -bench=. -benchmem ./...
+    (cd "$PROJECT_ROOT" && go test -bench=. -benchmem ./...)
 }
 
 run_race_detection() {
     echo "Running tests with race detection..."
-    go test -race ./...
+    (cd "$PROJECT_ROOT" && go test -race ./...)
 }
 
 run_all() {
