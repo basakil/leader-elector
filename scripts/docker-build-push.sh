@@ -2,7 +2,25 @@
 
 set -e
 
-# Usage: ./scripts/docker-build-push.sh --repo <repository-path> [--tag <image-tag>]
+print_help() {
+  cat <<EOF
+Build and publish a container image using ko.
+
+Usage:
+  $0 --repo <repository-path> [--tag <image-tag>]
+
+Mandatory parameters:
+  --repo <repository-path>   The container repository path (e.g., gcr.io/my-project/leader-elector)
+
+Optional parameters:
+  --tag <image-tag>          The image tag to use (default: latest)
+  -h, --help                 Show this help message and exit
+
+Examples:
+  $0 --repo gcr.io/my-project/leader-elector
+  $0 --repo docker.io/myuser/leader-elector --tag v1.2.3
+EOF
+}
 
 # Find project root (parent of script directory) without cd
 SCRIPT=$(readlink -f "$0")
@@ -25,9 +43,13 @@ while [[ $# -gt 0 ]]; do
       shift # past argument
       shift # past value
       ;;
+    -h|--help)
+      print_help
+      exit 0
+      ;;
     *)
       echo "Unknown option: $1"
-      echo "Usage: $0 --repo <repository-path> [--tag <image-tag>]"
+      print_help
       exit 1
       ;;
   esac
@@ -35,7 +57,7 @@ done
 
 if [ -z "$REPO" ]; then
   echo "Error: --repo <repository-path> is required."
-  echo "Usage: $0 --repo <repository-path> [--tag <image-tag>]"
+  print_help
   exit 1
 fi
 

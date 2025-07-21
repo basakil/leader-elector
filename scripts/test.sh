@@ -4,6 +4,28 @@
 
 set -e
 
+print_help() {
+  cat <<EOF
+Run tests, coverage, benchmarks, or race detection for the leader-elector Go project.
+
+Usage:
+  $0 [tests|coverage|benchmarks|race|all]
+
+Parameters:
+  tests       Run basic tests
+  coverage    Run tests with coverage report
+  benchmarks  Run performance benchmarks
+  race        Run tests with race detection
+  all         Run all tests (default)
+  -h, --help  Show this help message and exit
+
+Examples:
+  $0 tests
+  $0 coverage
+  $0 all
+EOF
+}
+
 # Find project root (parent of script directory) without cd
 SCRIPT=$(readlink -f "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
@@ -62,13 +84,12 @@ case "${1:-all}" in
     "all")
         run_all
         ;;
+    "-h"|"--help")
+        print_help
+        exit 0
+        ;;
     *)
-        echo "Usage: $0 [tests|coverage|benchmarks|race|all]"
-        echo "  tests      - Run basic tests"
-        echo "  coverage   - Run tests with coverage report"
-        echo "  benchmarks - Run performance benchmarks"
-        echo "  race       - Run tests with race detection"
-        echo "  all        - Run all tests (default)"
+        print_help
         exit 1
         ;;
 esac
