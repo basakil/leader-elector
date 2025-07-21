@@ -103,7 +103,7 @@ This project includes comprehensive unit tests and benchmarks. To run the tests:
 
 ```bash
 # Run all tests
-go test ./...
+./scripts/test.sh tests
 
 # Run tests with verbose output
 go test -v ./...
@@ -175,3 +175,19 @@ When contributing to this project:
 2. Ensure all tests pass
 3. Update documentation as needed
 4. Follow Go best practices and conventions
+
+## Building and Publishing Images
+
+You can build and publish a container image using the [ko](https://github.com/ko-build/ko) tool via the provided script:
+
+```bash
+# Build and publish with the default tag 'latest'
+./scripts/docker-build-push.sh --repo <repository-path>
+
+# Build and publish with a specific tag
+./scripts/docker-build-push.sh --repo <repository-path> --tag v1.2.3
+```
+
+- `<repository-path>` should be your container registry path, e.g., `gcr.io/my-project/leader-elector` or `docker.io/myuser/leader-elector`.
+- The script will build the image from `main.go` and publish it using ko.
+- You must have `ko` installed and configured in your environment.
