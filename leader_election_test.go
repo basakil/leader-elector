@@ -16,13 +16,13 @@ import (
 // TestLeaderElectionConfig tests the leader election configuration creation
 func TestLeaderElectionConfig(t *testing.T) {
 	// Set up test environment
-	os.Setenv("LEASE_NAME", "test-lease")
-	os.Setenv("NAMESPACE", "test-namespace")
-	os.Setenv("LEASE_DIRECTORY", t.TempDir())
+	os.Setenv(EnvLeaseName, "test-lease")
+	os.Setenv(EnvNamespace, "test-namespace")
+	os.Setenv(EnvLeaseDirectory, t.TempDir())
 	defer func() {
-		os.Unsetenv("LEASE_NAME")
-		os.Unsetenv("NAMESPACE")
-		os.Unsetenv("LEASE_DIRECTORY")
+		os.Unsetenv(EnvLeaseName)
+		os.Unsetenv(EnvNamespace)
+		os.Unsetenv(EnvLeaseDirectory)
 	}()
 
 	// Test that we can create a basic leader election config
@@ -78,22 +78,22 @@ func TestLeaderElectionTiming(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment variables
 			if tt.leaseDuration != "" {
-				os.Setenv("LE_LEASE_DURATION", tt.leaseDuration)
-				defer os.Unsetenv("LE_LEASE_DURATION")
+				os.Setenv(EnvLeaseDuration, tt.leaseDuration)
+				defer os.Unsetenv(EnvLeaseDuration)
 			}
 			if tt.renewDeadline != "" {
-				os.Setenv("LE_RENEW_DEADLINE", tt.renewDeadline)
-				defer os.Unsetenv("LE_RENEW_DEADLINE")
+				os.Setenv(EnvRenewDeadline, tt.renewDeadline)
+				defer os.Unsetenv(EnvRenewDeadline)
 			}
 			if tt.retryPeriod != "" {
-				os.Setenv("LE_RETRY_PERIOD", tt.retryPeriod)
-				defer os.Unsetenv("LE_RETRY_PERIOD")
+				os.Setenv(EnvRetryPeriod, tt.retryPeriod)
+				defer os.Unsetenv(EnvRetryPeriod)
 			}
 
 			// Test the timing functions
-			leaseDuration := getEnvDuration("LEASE_DURATION", defaultLeaseDuration)
-			renewDeadline := getEnvDuration("RENEW_DEADLINE", defaultRenewDeadline)
-			retryPeriod := getEnvDuration("RETRY_PERIOD", defaultRetryPeriod)
+			leaseDuration := getEnvDuration(EnvLeaseDuration, defaultLeaseDuration)
+			renewDeadline := getEnvDuration(EnvRenewDeadline, defaultRenewDeadline)
+			retryPeriod := getEnvDuration(EnvRetryPeriod, defaultRetryPeriod)
 
 			if leaseDuration != tt.expectedLease {
 				t.Errorf("LeaseDuration = %v, want %v", leaseDuration, tt.expectedLease)
@@ -210,10 +210,10 @@ func TestLeaderElectionCallbacks(t *testing.T) {
 // TestErrorHandling tests error handling scenarios
 func TestErrorHandling(t *testing.T) {
 	t.Run("invalid duration format", func(t *testing.T) {
-		os.Setenv("LE_LEASE_DURATION", "invalid-duration")
-		defer os.Unsetenv("LE_LEASE_DURATION")
+		os.Setenv(EnvLeaseDuration, "invalid-duration")
+		defer os.Unsetenv(EnvLeaseDuration)
 
-		result := getEnvDuration("LEASE_DURATION", 15*time.Second)
+		result := getEnvDuration(EnvLeaseDuration, 15*time.Second)
 		if result != 15*time.Second {
 			t.Errorf("Expected default value for invalid duration, got %v", result)
 		}
@@ -268,22 +268,22 @@ func TestConcurrency(t *testing.T) {
 func TestEnvironmentVariableHandling(t *testing.T) {
 	t.Run("missing environment variables", func(t *testing.T) {
 		// Clear all relevant environment variables
-		os.Unsetenv("LEASE_NAME")
-		os.Unsetenv("NAMESPACE")
-		os.Unsetenv("LEASE_DIRECTORY")
+		os.Unsetenv(EnvLeaseName)
+		os.Unsetenv(EnvNamespace)
+		os.Unsetenv(EnvLeaseDirectory)
 
 		// Test that defaults are used
-		leaseDuration := getEnvDuration("LEASE_DURATION", defaultLeaseDuration)
+		leaseDuration := getEnvDuration(EnvLeaseDuration, defaultLeaseDuration)
 		if leaseDuration != defaultLeaseDuration {
 			t.Errorf("Expected default lease duration, got %v", leaseDuration)
 		}
 	})
 
 	t.Run("empty environment variables", func(t *testing.T) {
-		os.Setenv("LE_LEASE_DURATION", "")
-		defer os.Unsetenv("LE_LEASE_DURATION")
+		os.Setenv(EnvLeaseDuration, "")
+		defer os.Unsetenv(EnvLeaseDuration)
 
-		leaseDuration := getEnvDuration("LEASE_DURATION", defaultLeaseDuration)
+		leaseDuration := getEnvDuration(EnvLeaseDuration, defaultLeaseDuration)
 		if leaseDuration != defaultLeaseDuration {
 			t.Errorf("Expected default lease duration for empty env var, got %v", leaseDuration)
 		}

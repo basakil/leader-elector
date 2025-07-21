@@ -24,19 +24,29 @@ const (
 	defaultRetryPeriod   = 2 * time.Second
 )
 
-// getEnvDuration gets duration from environment variable with LE_ prefix, returns default if not set
-func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
-	if value := os.Getenv("LE_" + key); value != "" {
+// Environment variable names as package-level constants
+const (
+	EnvLeaseName       = "LEASE_NAME"
+	EnvNamespace       = "NAMESPACE"
+	EnvLeaseDirectory  = "LEASE_DIRECTORY"
+	EnvLeaseDuration   = "LEASE_DURATION"
+	EnvRenewDeadline   = "LEASE_RENEW_DEADLINE"
+	EnvRetryPeriod     = "LEASE_RETRY_PERIOD"
+)
+
+// getEnvDuration gets duration from environment variable, returns default if not set
+func getEnvDuration(envVar string, defaultValue time.Duration) time.Duration {
+	if value := os.Getenv(envVar); value != "" {
 		if duration, err := time.ParseDuration(value); err == nil {
 			return duration
 		}
-		log.Printf("Invalid duration format for LE_%s: %s, using default: %v", key, value, defaultValue)
+		log.Printf("Invalid duration format for %s: %s, using default: %v", envVar, value, defaultValue)
 	}
 	return defaultValue
 }
 
 func getLeaseDirectoryPath() string {
-	dirPath, exists := os.LookupEnv("LEASE_DIRECTORY")
+	dirPath, exists := os.LookupEnv(EnvLeaseDirectory)
 	if !exists {
 		dirPath = filepath.Join(os.TempDir(), "leader-elector")
 	}
@@ -84,12 +94,12 @@ func setupLeaderElection() (*leaderelection.LeaderElectionConfig, string, error)
 	}
 
 	// Get lease and namespace from environment variables
-	leaseName, exists := os.LookupEnv("LEASE_NAME")
+	leaseName, exists := os.LookupEnv(EnvLeaseName)
 	if !exists {
 		leaseName = filepath.Base(os.Args[0])
 	}
 
-	namespace, exists := os.LookupEnv("NAMESPACE")
+	namespace, exists := os.LookupEnv(EnvNamespace)
 	if !exists {
 		log.Println("NAMESPACE environment variable is not set. Trying to fetch from config..")
 		clientCfg, _ := clientcmd.NewDefaultClientConfigLoadingRules().Load()
@@ -103,13 +113,21 @@ func setupLeaderElection() (*leaderelection.LeaderElectionConfig, string, error)
 	leaseDirectory := getLeaseDirectoryPath()
 	leaderStatusFile := filepath.Join(leaseDirectory, leaseName)
 
-	log.Printf("Starting leader election - LEASE_NAME: %s, NAMESPACE: %s, LEASE_DIRECTORY: %s", 
-		leaseName, namespace, leaseDirectory)
+	log.Printf("Starting leader election - %s: %s, %s: %s, %s: %s", EnvLeaseName, leaseName, EnvNamespace, namespace, EnvLeaseDirectory, leaseDirectory)
 
 	// Get timing values from environment variables
-	leaseDuration := getEnvDuration("LEASE_DURATION", defaultLeaseDuration)
-	renewDeadline := getEnvDuration("RENEW_DEADLINE", defaultRenewDeadline)
-	retryPeriod := getEnvDuration("RETRY_PERIOD", defaultRetryPeriod)
+	leaseDuration := getEnvDuration(EnvLeaseDuration, defaultLeaseDuration)
+	renewDeadline := getEnvDuration(EnvRenewDeadline, defaultRenewDeadline)
+	retryPeriod := getEnvDuration(EnvRetryPeriod, defaultRetryPeriod)
+
+	// Print all relevant environment variables
+	log.Printf("Environment: %s=%s, %s=%s, %s=%s, %s=%v, %s=%v, %s=%v",
+		EnvLeaseName, leaseName,
+		EnvNamespace, namespace,
+		EnvLeaseDirectory, leaseDirectory,
+		EnvLeaseDuration, os.Getenv(EnvLeaseDuration),
+		EnvRenewDeadline, os.Getenv(EnvRenewDeadline),
+		EnvRetryPeriod, os.Getenv(EnvRetryPeriod))
 
 	log.Printf("Leader election timing - LeaseDuration: %v, RenewDeadline: %v, RetryPeriod: %v",
 		leaseDuration, renewDeadline, retryPeriod)
@@ -135,16 +153,14 @@ func setupLeaderElection() (*leaderelection.LeaderElectionConfig, string, error)
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
 				// we're now the leader
-				log.Printf("Became leader for LEASE_NAME: %s in NAMESPACE: %s", 
-					lock.LeaseMeta.Name, lock.LeaseMeta.Namespace)
+				log.Printf("Became leader for %s: %s in %s: %s", EnvLeaseName, lock.LeaseMeta.Name, EnvNamespace, lock.LeaseMeta.Namespace)
 				if err := updateStatus(id, leaderStatusFile); err != nil {
 					log.Printf("Failed to update status file: %v", err)
 				}
 			},
 			OnStoppedLeading: func() {
 				// we are not the leader anymore
-				log.Printf("Lost leadership for LEASE_NAME: %s in NAMESPACE: %s", 
-					lock.LeaseMeta.Name, lock.LeaseMeta.Namespace)
+				log.Printf("Lost leadership for %s: %s in %s: %s", EnvLeaseName, lock.LeaseMeta.Name, EnvNamespace, lock.LeaseMeta.Namespace)
 				if err := removeStatusFile(leaderStatusFile); err != nil {
 					log.Printf("Failed to remove status file: %v", err)
 				}
@@ -152,8 +168,7 @@ func setupLeaderElection() (*leaderelection.LeaderElectionConfig, string, error)
 			OnNewLeader: func(identity string) {
 				// we observe a new leader
 				if identity != id {
-					log.Printf("New leader elected: %s for LEASE_NAME: %s in NAMESPACE: %s", 
-						identity, lock.LeaseMeta.Name, lock.LeaseMeta.Namespace)
+					log.Printf("New leader elected: %s for %s: %s in %s: %s", identity, EnvLeaseName, lock.LeaseMeta.Name, EnvNamespace, lock.LeaseMeta.Namespace)
 					if err := removeStatusFile(leaderStatusFile); err != nil {
 						log.Printf("Failed to remove status file: %v", err)
 					}
