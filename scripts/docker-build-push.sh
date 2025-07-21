@@ -4,10 +4,10 @@ set -e
 
 # Usage: ./scripts/docker-build-push.sh --repo <repository-path> [--tag <image-tag>]
 
-# Change to project root (parent of script directory)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$SCRIPT_DIR/.."
-cd "$PROJECT_ROOT"
+# Find project root (parent of script directory) without cd
+SCRIPT=$(readlink -f "$0")
+SCRIPTPATH=$(dirname "$SCRIPT")
+PROJECT_ROOT="$SCRIPTPATH/.."
 
 TAG="latest"
 
@@ -40,7 +40,7 @@ if [ -z "$REPO" ]; then
 fi
 
 # Build and publish the image using ko
-KO_CMD="ko publish --tags=$TAG --repository=$REPO ./main.go"
+KO_CMD="ko publish --tags=$TAG --repository=$REPO $PROJECT_ROOT/main.go"
 echo "Running: $KO_CMD"
 $KO_CMD
 
