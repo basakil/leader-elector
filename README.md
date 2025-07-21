@@ -27,9 +27,9 @@ The identity used for each replica is the pod's hostname.
 
 ### Optional
 - `LEASE_DIRECTORY`: Directory for status files (defaults to `/tmp/leader-elector`)
-- `LE_LEASE_DURATION`: Duration of the lease (default: `15s`)
-- `LE_RENEW_DEADLINE`: Deadline for renewing the lease (default: `10s`)
-- `LE_RETRY_PERIOD`: Period between retry attempts (default: `2s`)
+- `LEASE_DURATION`: Duration of the lease (default: `15s`)
+- `LEASE_RENEW_DEADLINE`: Deadline for renewing the lease (default: `10s`)
+- `LEASE_RETRY_PERIOD`: Period between retry attempts (default: `2s`)
 
 ## Deployment
 
@@ -49,11 +49,11 @@ spec:
       valueFrom:
         fieldRef:
           fieldPath: metadata.namespace
-    - name: LE_LEASE_DURATION
+    - name: LEASE_DURATION
       value: "30s"
-    - name: LE_RENEW_DEADLINE
+    - name: LEASE_RENEW_DEADLINE
       value: "20s"
-    - name: LE_RETRY_PERIOD
+    - name: LEASE_RETRY_PERIOD
       value: "5s"
     volumeMounts:
     - name: leader-status

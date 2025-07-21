@@ -17,28 +17,28 @@ func TestGetEnvDuration(t *testing.T) {
 	}{
 		{
 			name:         "valid duration",
-			envKey:       "LEASE_DURATION",
+			envKey:       EnvLeaseDuration,
 			envValue:     "30s",
 			defaultValue: 15 * time.Second,
 			expected:     30 * time.Second,
 		},
 		{
 			name:         "valid duration with minutes",
-			envKey:       "RENEW_DEADLINE",
+			envKey:       EnvRenewDeadline,
 			envValue:     "2m",
 			defaultValue: 10 * time.Second,
 			expected:     2 * time.Minute,
 		},
 		{
 			name:         "invalid duration",
-			envKey:       "RETRY_PERIOD",
+			envKey:       EnvRetryPeriod,
 			envValue:     "invalid",
 			defaultValue: 2 * time.Second,
 			expected:     2 * time.Second,
 		},
 		{
 			name:         "empty environment variable",
-			envKey:       "LEASE_DURATION",
+			envKey:       EnvLeaseDuration,
 			envValue:     "",
 			defaultValue: 15 * time.Second,
 			expected:     15 * time.Second,
@@ -49,8 +49,8 @@ func TestGetEnvDuration(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment variable
 			if tt.envValue != "" {
-				os.Setenv("LE_"+tt.envKey, tt.envValue)
-				defer os.Unsetenv("LE_" + tt.envKey)
+				os.Setenv(tt.envKey, tt.envValue)
+				defer os.Unsetenv(tt.envKey)
 			}
 
 			result := getEnvDuration(tt.envKey, tt.defaultValue)
@@ -89,15 +89,15 @@ func TestGetLeaseDirectoryPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment variable if provided
 			if tt.leaseDirEnv != "" {
-				os.Setenv("LEASE_DIRECTORY", tt.leaseDirEnv)
-				defer os.Unsetenv("LEASE_DIRECTORY")
+				os.Setenv(EnvLeaseDirectory, tt.leaseDirEnv)
+				defer os.Unsetenv(EnvLeaseDirectory)
 			}
 
 			// Create a temporary directory for testing
 			tempDir := t.TempDir()
 			if tt.leaseDirEnv == "" {
-				os.Setenv("LEASE_DIRECTORY", tempDir)
-				defer os.Unsetenv("LEASE_DIRECTORY")
+				os.Setenv(EnvLeaseDirectory, tempDir)
+				defer os.Unsetenv(EnvLeaseDirectory)
 			}
 
 			// Test the function
@@ -242,11 +242,11 @@ func TestSetupLeaderElection(t *testing.T) {
 
 // Benchmark tests
 func BenchmarkGetEnvDuration(b *testing.B) {
-	os.Setenv("LE_LEASE_DURATION", "30s")
-	defer os.Unsetenv("LE_LEASE_DURATION")
+	os.Setenv(EnvLeaseDuration, "30s")
+	defer os.Unsetenv(EnvLeaseDuration)
 
 	for i := 0; i < b.N; i++ {
-		getEnvDuration("LEASE_DURATION", 15*time.Second)
+		getEnvDuration(EnvLeaseDuration, 15*time.Second)
 	}
 }
 
