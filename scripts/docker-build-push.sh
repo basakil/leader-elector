@@ -62,7 +62,8 @@ if [ -z "$REPO" ]; then
 fi
 
 # Build and publish the image using ko
-KO_CMD="ko publish --tags=$TAG --repository=$REPO $PROJECT_ROOT/main.go"
+export KO_DOCKER_REPO="$REPO"
+KO_CMD="ko publish --bare --tags=$TAG $PROJECT_ROOT/main.go"
 echo "Running: $KO_CMD"
 $KO_CMD
 

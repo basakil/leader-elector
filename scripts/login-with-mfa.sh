@@ -3,7 +3,8 @@
 # This script is designed to be sourced to set temporary AWS credentials
 # using an MFA token.
 
-set -e
+## do not use -e, since this script will be sourced.
+# set -e
 
 print_help() {
   cat <<EOF
