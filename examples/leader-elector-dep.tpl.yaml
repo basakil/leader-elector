@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: leader-elector-test
+  labels:
+    app: leader-elector-test
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 2    
+  selector:
+    matchLabels:
+      app: leader-elector-test
+  template:
+    metadata:
+      labels:
+        app: leader-elector-test
+    spec:
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 5
+      serviceAccountName: lease-elector
+      containers:
+      - name: main
+        image: ${IMAGE_MAIN}
+        command: ["/bin/sh", "-c", "trap : TERM INT; sleep infinity & wait"]
+        imagePullPolicy: Always
+        # resources:
+        #   requests:
+        #     memory: "50Mi"
+        #     cpu: "10m"       
+        #   limits:
+        #     memory: "200Mi"
+        #     cpu: "50m"
+        volumeMounts:
+        - name: leader-status
+          mountPath: /tmp/leader_status            
+      - name: leader-elector-sidecar
+        image: ${IMAGE_LEASE}
+        env:
+        - name: LEASE_NAME
+          value: leader-elector-test
+        - name: LEASE_DIRECTORY
+          value: /tmp/leader_status       
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        volumeMounts:
+        - name: leader-status
+          mountPath: /tmp/leader_status
+      volumes:
+      - name: leader-status
+        emptyDir: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: lease-elector
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: lease-elector
+rules:
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["*"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: lease-elector
+subjects:
+  - kind: ServiceAccount
+    name: lease-elector
+    namespace: "${NAMESPACE}"
+roleRef:
+  kind: Role
+  name: lease-elector
+  apiGroup: rbac.authorization.k8s.io
+---
