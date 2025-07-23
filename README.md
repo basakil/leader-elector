@@ -91,8 +91,8 @@ done
 You can build and run this project locally with Go:
 
 ```bash
-go build -o leader-election-sidecar main.go
-LEASE_NAME=myapp-lock NAMESPACE=default ./leader-election-sidecar
+go build -o bin/leader-election-sidecar main.go
+LEASE_NAME=myapp-lock NAMESPACE=default ./bin/leader-election-sidecar
 ```
 
 This will run the sidecar and attempt to perform leader election using your local Kubernetes context (either from your in-cluster configuration or from `$KUBECONFIG`).
