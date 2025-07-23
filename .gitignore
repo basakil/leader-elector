@@ -29,3 +29,7 @@ bin/
 *.test
 main
 leader-elector
+
+*.env
+.env/
+.env
