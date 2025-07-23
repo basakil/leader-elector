@@ -21,3 +21,11 @@
 go.work
 
 NOTES.md
+
+# Ignore Go build output and binaries
+bin/
+*.exe
+*.out
+*.test
+main
+leader-elector
